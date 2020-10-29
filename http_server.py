@@ -3,6 +3,7 @@ import sys
 import traceback
 import os.path
 import mimetypes
+import subprocess
 
 def response_ok(body=b"This is a minimal response", mimetype=b"text/plain"):
     """
@@ -108,21 +109,31 @@ def response_path(path):
     # CONTENTS of `make_time.py`.
 
     content = b""
+    mime_type = ""
 
-    if path == '/':
-        pass
+    if os.path.isdir('webroot' + path):
+        mime_type = 'text/plain'
+        file_list = ""
+        for file in os.listdir('webroot' + path):
+            file_list = file_list + file + ','
+        content = file_list[:-1].encode('utf-8')
     elif os.path.isfile('webroot/' + path):
-        with open('webroot/' + path, "rb") as f:
-            byte = f.read(1)
-            while byte:
-                content = content + byte
+        mime_type = mimetypes.guess_type(path)[0]
+        if mime_type == 'text/x-python':
+            mime_type = 'text/html'
+            proc = subprocess.Popen(['python', 'webroot/' + path, ''],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            content = proc.communicate()[0]
+        else:
+            with open('webroot/' + path, "rb") as f:
                 byte = f.read(1)
+                while byte:
+                    content = content + byte
+                    byte = f.read(1)
     else:
         raise NameError
 
-    mime_type = mimetypes.guess_type(path)[0]
-
-    return content, b'{mime_type}'
+    return content, mime_type.encode('utf-8')
 
 
 def server(log_buffer=sys.stderr):
@@ -163,6 +174,7 @@ def server(log_buffer=sys.stderr):
                     # use the content and mimetype from response_path to build a
                     # response_ok.
                     body, mimetype = response_path(path)
+                    print(mimetype)
                     response = response_ok(
                         body=body,
                         mimetype=mimetype
